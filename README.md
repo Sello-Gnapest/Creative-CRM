@@ -4,7 +4,7 @@ Creative CRM is a personal customer relationship manager for organizing contacts
 
 ## Project status
 
-Early development. The current app is a responsive, interactive dashboard using sample data in your browser. Google sign-in, storage, and synchronization are not implemented yet; no Google account is accessed.
+Early development. The current app is a responsive dashboard with sample tasks and calendar activity. Contacts can be added, edited, searched, and deleted; contact records are saved in the current browser using local storage. Google sign-in and synchronization are not implemented, and no Google account is accessed.
 
 ## Getting started
 

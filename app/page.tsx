@@ -19,17 +19,20 @@ import {
   ListTodo,
   Mail,
   Menu,
+  Pencil,
   Plus,
   Search,
   Settings2,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   UsersRound,
   X,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Contact = {
+  id: string;
   name: string;
   company: string;
   email: string;
@@ -41,6 +44,7 @@ type Contact = {
 
 const initialContacts: Contact[] = [
   {
+    id: "olivia-rhye",
     name: "Olivia Rhye",
     company: "Layers",
     email: "olivia@layers.com",
@@ -50,6 +54,7 @@ const initialContacts: Contact[] = [
     lastContact: "Today",
   },
   {
+    id: "phoenix-baker",
     name: "Phoenix Baker",
     company: "Catalog",
     email: "phoenix@catalog.com",
@@ -59,6 +64,7 @@ const initialContacts: Contact[] = [
     lastContact: "Yesterday",
   },
   {
+    id: "lana-steiner",
     name: "Lana Steiner",
     company: "Circooles",
     email: "lana@circooles.com",
@@ -68,6 +74,7 @@ const initialContacts: Contact[] = [
     lastContact: "Oct 24",
   },
   {
+    id: "demi-wilkinson",
     name: "Demi Wilkinson",
     company: "Sisyphus",
     email: "demi@sisyphus.com",
@@ -77,6 +84,7 @@ const initialContacts: Contact[] = [
     lastContact: "Oct 22",
   },
   {
+    id: "candice-wu",
     name: "Candice Wu",
     company: "Quotient",
     email: "candice@quotient.com",
@@ -95,18 +103,62 @@ const startingTasks = [
 
 const navigation = [
   { label: "Overview", icon: LayoutDashboard },
-  { label: "Contacts", icon: UsersRound, count: "128" },
+  { label: "Contacts", icon: UsersRound },
   { label: "Tasks", icon: ListTodo, count: "6" },
   { label: "Calendar", icon: CalendarDays },
 ];
 
+function isContact(value: unknown): value is Contact {
+  if (!value || typeof value !== "object") return false;
+  const contact = value as Record<string, unknown>;
+  return ["id", "name", "company", "email", "initials", "color", "stage", "lastContact"]
+    .every((key) => typeof contact[key] === "string");
+}
+
 export default function Home() {
   const [activePage, setActivePage] = useState("Overview");
   const [contacts, setContacts] = useState(initialContacts);
+  const [contactsLoaded, setContactsLoaded] = useState(false);
+  const [storageAvailable, setStorageAvailable] = useState(true);
+  const [storageError, setStorageError] = useState("");
   const [tasks, setTasks] = useState(startingTasks);
   const [query, setQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [formError, setFormError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedContacts = window.localStorage.getItem("creative-crm-contacts");
+      if (savedContacts !== null) {
+        const parsedContacts: unknown = JSON.parse(savedContacts);
+        if (!Array.isArray(parsedContacts) || !parsedContacts.every(isContact)) {
+          throw new Error("Saved contacts have an invalid format.");
+        }
+        // Load browser-only data after hydration to keep server and client markup consistent.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setContacts(parsedContacts);
+      }
+    } catch {
+      setStorageAvailable(false);
+      setStorageError("Saved contacts could not be loaded. Changes will stay in memory for this session.");
+    } finally {
+      setContactsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!contactsLoaded || !storageAvailable) return;
+    try {
+      window.localStorage.setItem("creative-crm-contacts", JSON.stringify(contacts));
+    } catch {
+      // Stop retrying the unavailable browser store after notifying the user.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStorageAvailable(false);
+      setStorageError("Contacts could not be saved in this browser. Changes will stay in memory for this session.");
+    }
+  }, [contacts, contactsLoaded, storageAvailable]);
 
   const filteredContacts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -118,13 +170,24 @@ export default function Home() {
     );
   }, [contacts, query]);
 
-  function addContact(event: FormEvent<HTMLFormElement>) {
+  function saveContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const name = String(formData.get("name")).trim();
     const email = String(formData.get("email")).trim();
     const company = String(formData.get("company")).trim() || "Independent";
-    if (!name || !email) return;
+    if (!name || !email) {
+      setFormError("Name and email are required.");
+      return;
+    }
+
+    const duplicateEmail = contacts.some((contact) =>
+      contact.email.toLowerCase() === email.toLowerCase() && contact.id !== editingContact?.id,
+    );
+    if (duplicateEmail) {
+      setFormError("A contact with this email address already exists.");
+      return;
+    }
 
     const initials = name
       .split(/\s+/)
@@ -132,20 +195,36 @@ export default function Home() {
       .map((part) => part[0])
       .join("")
       .toUpperCase();
-    setContacts((current) => [
-      {
-        name,
-        company,
-        email,
-        initials,
-        color: "blue",
-        stage: "New contact",
-        lastContact: "Just now",
-      },
-      ...current,
-    ]);
+    const contact: Contact = {
+      id: editingContact?.id ?? crypto.randomUUID(),
+      name,
+      company,
+      email,
+      initials,
+      color: editingContact?.color ?? "blue",
+      stage: String(formData.get("stage") ?? "Prospect"),
+      lastContact: editingContact?.lastContact ?? "Just now",
+    };
+    if (editingContact) {
+      setContacts((current) => current.map((item) => item.id === contact.id ? contact : item));
+    } else {
+      setContacts((current) => [contact, ...current]);
+    }
     setActivePage("Contacts");
     setIsModalOpen(false);
+    setEditingContact(null);
+    setFormError("");
+  }
+
+  function openContactModal(contact?: Contact) {
+    setEditingContact(contact ?? null);
+    setFormError("");
+    setIsModalOpen(true);
+  }
+
+  function deleteContact(contact: Contact) {
+    if (!window.confirm(`Delete ${contact.name} from your contacts?`)) return;
+    setContacts((current) => current.filter((item) => item.id !== contact.id));
   }
 
   const pageHeading =
@@ -191,7 +270,9 @@ export default function Home() {
             >
               <Icon size={18} strokeWidth={1.8} />
               <span>{label}</span>
-              {count && <span className="nav-count">{count}</span>}
+              {(label === "Contacts" || count) && (
+                <span className="nav-count">{label === "Contacts" ? contacts.length : count}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -236,8 +317,10 @@ export default function Home() {
               <h1>{pageHeading}<span className="wave">✳</span></h1>
               <p className="page-subtitle">{activePage === "Overview" ? "Here’s what’s happening with your relationships today." : `Keep your ${activePage.toLowerCase()} organized and moving forward.`}</p>
             </div>
-            <button className="primary-button" onClick={() => setIsModalOpen(true)}><Plus size={17} /> Add contact</button>
+            <button className="primary-button" onClick={() => openContactModal()}><Plus size={17} /> Add contact</button>
           </div>
+
+          {storageError && <div className="storage-warning" role="status">{storageError}</div>}
 
           {activePage === "Settings" ? (
             <section className="settings-card">
@@ -248,7 +331,7 @@ export default function Home() {
           ) : (
             <>
               {activePage === "Overview" && <section className="stats-grid" aria-label="CRM summary">
-                <StatCard label="Total contacts" value="128" change="+12%" detail="vs. last month" icon={<UsersRound size={17} />} trend="up" />
+                <StatCard label="Total contacts" value={String(contacts.length)} change="In your workspace" detail={storageAvailable ? "saved in this browser" : "session only"} icon={<UsersRound size={17} />} trend="up" />
                 <StatCard label="Follow-ups due" value="6" change="2 overdue" detail="needs your attention" icon={<Clock3 size={17} />} trend="warm" />
                 <StatCard label="Meetings this week" value="8" change="+3" detail="vs. last week" icon={<CalendarDays size={17} />} trend="up" />
                 <StatCard label="Tasks completed" value="24" change="80%" detail="of weekly goal" icon={<Check size={17} />} trend="up" />
@@ -260,7 +343,7 @@ export default function Home() {
                     <div><h2>Recent contacts</h2><p>Your relationship, at a glance.</p></div>
                     <button className="text-button" onClick={() => setActivePage("Contacts")}>View all <ArrowUpRight size={15} /></button>
                   </div>
-                  <ContactTable contacts={filteredContacts.slice(0, 5)} />
+                  <ContactTable contacts={filteredContacts.slice(0, 5)} onEdit={openContactModal} onDelete={deleteContact} />
                 </div>
                 <div className="panel tasks-panel">
                   <div className="section-title-row">
@@ -298,7 +381,7 @@ export default function Home() {
                 </div>
               </section>}
 
-              {activePage === "Contacts" && <section className="panel directory-panel"><div className="section-title-row"><div><h2>All contacts</h2><p>{contacts.length} people in your network</p></div><button className="filter-button"><SlidersHorizontal size={15} /> Filters <ChevronDown size={14} /></button></div><ContactTable contacts={filteredContacts} /></section>}
+              {activePage === "Contacts" && <section className="panel directory-panel"><div className="section-title-row"><div><h2>All contacts</h2><p>{contacts.length} people in your network</p></div><button className="filter-button"><SlidersHorizontal size={15} /> Filters <ChevronDown size={14} /></button></div><ContactTable contacts={filteredContacts} onEdit={openContactModal} onDelete={deleteContact} /></section>}
 
               {activePage === "Tasks" && <section className="panel directory-panel"><div className="section-title-row"><div><h2>Follow-ups</h2><p>Small thoughtful actions, right on time.</p></div><button className="filter-button"><ArrowDown size={15} /> Due date <ChevronDown size={14} /></button></div><div className="task-list task-list-large">{tasks.map((task, index) => <button className={`task-item ${task.done ? "task-done" : ""}`} key={task.title} onClick={() => setTasks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, done: !item.done } : item))}><span className="task-check">{task.done && <Check size={13} />}</span><span className="task-content"><strong>{task.title}</strong><small><Clock3 size={13} /> {task.time}</small></span><ChevronRight size={17} className="task-chevron" /></button>)}</div></section>}
 
@@ -306,11 +389,11 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>Made for meaningful connections <span className="footer-heart">♥</span></span><span><span className="status-dot" /> Sample data · Not connected to Google</span></footer>
+          <footer className="page-footer"><span>Made for meaningful connections <span className="footer-heart">♥</span></span><span><span className="status-dot" /> Local demo · Not connected to Google</span></footer>
         </div>
       </section>
 
-      {isModalOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsModalOpen(false); }}><section className="contact-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><div className="modal-icon"><UsersRound size={19} /></div><h2 id="modal-title">Add a contact</h2><p>A new connection starts with a name.</p></div><button className="icon-button" aria-label="Close dialog" onClick={() => setIsModalOpen(false)}><X size={19} /></button></div><form onSubmit={addContact}><label>Full name<input name="name" placeholder="e.g. Jamie Chen" required autoFocus /></label><label>Email address<input name="email" type="email" placeholder="jamie@company.com" required /></label><label>Company <span className="optional-label">Optional</span><input name="company" placeholder="Where they work" /></label><div className="modal-note"><Mail size={15} /> Your contact stays in this demo until you leave the page.</div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setIsModalOpen(false)}>Cancel</button><button type="submit" className="primary-button">Add contact <ArrowUpRight size={15} /></button></div></form></section></div>}
+      {isModalOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setIsModalOpen(false); setEditingContact(null); setFormError(""); } }}><section className="contact-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><div className="modal-icon"><UsersRound size={19} /></div><h2 id="modal-title">{editingContact ? "Edit contact" : "Add a contact"}</h2><p>{editingContact ? "Keep their details up to date." : "A new connection starts with a name."}</p></div><button className="icon-button" aria-label="Close dialog" onClick={() => { setIsModalOpen(false); setEditingContact(null); setFormError(""); }}><X size={19} /></button></div><form onSubmit={saveContact}><label>Full name<input name="name" placeholder="e.g. Jamie Chen" defaultValue={editingContact?.name} required autoFocus /></label><label>Email address<input name="email" type="email" placeholder="jamie@company.com" defaultValue={editingContact?.email} required /></label><label>Company <span className="optional-label">Optional</span><input name="company" placeholder="Where they work" defaultValue={editingContact?.company} /></label><label>Relationship stage<select name="stage" defaultValue={editingContact?.stage ?? "Prospect"}><option>Active client</option><option>Lead</option><option>Prospect</option></select></label>{formError && <p className="form-error" role="alert">{formError}</p>}<div className="modal-note"><Mail size={15} /> {storageAvailable ? "Contacts are saved in this browser on this device." : "Contacts are kept for this session only."}</div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setIsModalOpen(false); setEditingContact(null); setFormError(""); }}>Cancel</button><button type="submit" className="primary-button">{editingContact ? "Save changes" : "Add contact"} <ArrowUpRight size={15} /></button></div></form></section></div>}
     </main>
   );
 }
@@ -319,8 +402,8 @@ function StatCard({ label, value, change, detail, icon, trend }: { label: string
   return <article className="stat-card"><div className="stat-heading"><span>{label}</span><span className="stat-icon">{icon}</span></div><div className="stat-value">{value}</div><div className="stat-foot"><span className={`stat-change ${trend === "warm" ? "stat-warm" : ""}`}>{trend === "up" && <ArrowUpRight size={13} />}{change}</span><span>{detail}</span></div></article>;
 }
 
-function ContactTable({ contacts }: { contacts: Contact[] }) {
-  return <div className="table-wrap"><table className="contact-table"><thead><tr><th>NAME</th><th>COMPANY</th><th>STAGE</th><th>LAST CONTACT</th><th aria-label="Actions" /></tr></thead><tbody>{contacts.map((contact) => <tr key={contact.email}><td><div className="contact-person"><Avatar initials={contact.initials} color={contact.color} /><span><strong>{contact.name}</strong><small>{contact.email}</small></span></div></td><td>{contact.company}</td><td><span className={`stage-pill ${contact.stage === "Active client" ? "stage-active" : contact.stage === "Lead" ? "stage-lead" : "stage-prospect"}`}><i />{contact.stage}</span></td><td>{contact.lastContact}</td><td><button className="row-more" aria-label={`More options for ${contact.name}`}><Ellipsis size={17} /></button></td></tr>)}</tbody></table>{contacts.length === 0 && <div className="empty-state"><Search size={20} /><strong>No contacts found</strong><span>Try another name, company, or email.</span></div>}</div>;
+function ContactTable({ contacts, onEdit, onDelete }: { contacts: Contact[]; onEdit: (contact: Contact) => void; onDelete: (contact: Contact) => void }) {
+  return <div className="table-wrap"><table className="contact-table"><thead><tr><th>NAME</th><th>COMPANY</th><th>STAGE</th><th>LAST CONTACT</th><th aria-label="Actions" /></tr></thead><tbody>{contacts.map((contact) => <tr key={contact.id}><td><div className="contact-person"><Avatar initials={contact.initials} color={contact.color} /><span><strong>{contact.name}</strong><small>{contact.email}</small></span></div></td><td>{contact.company}</td><td><span className={`stage-pill ${contact.stage === "Active client" ? "stage-active" : contact.stage === "Lead" ? "stage-lead" : "stage-prospect"}`}><i />{contact.stage}</span></td><td>{contact.lastContact}</td><td><div className="contact-actions"><button className="row-more" aria-label={`Edit ${contact.name}`} onClick={() => onEdit(contact)}><Pencil size={15} /></button><button className="row-more" aria-label={`Delete ${contact.name}`} onClick={() => onDelete(contact)}><Trash2 size={15} /></button></div></td></tr>)}</tbody></table>{contacts.length === 0 && <div className="empty-state"><Search size={20} /><strong>No contacts found</strong><span>Try another name, company, or email.</span></div>}</div>;
 }
 
 function Avatar({ initials, color }: { initials: string; color: string }) {

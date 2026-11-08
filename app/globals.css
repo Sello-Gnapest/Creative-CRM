@@ -114,6 +114,11 @@ h1 { margin-top: 9px; color: #252a30; font: 700 27px Manrope, sans-serif; letter
 .stage-lead { color: #a8754d; background: #faf2e8; }
 .stage-prospect { color: #727c91; background: #eff1f5; }
 .row-more, .more-button { border: 0; background: transparent; color: #91969a; display: grid; place-items: center; }
+.contact-actions { display: flex; align-items: center; gap: 5px; }
+.contact-actions .row-more { width: 25px; height: 25px; border-radius: 4px; }
+.contact-actions .row-more:hover { color: #3d7465; background: #edf4f0; }
+.storage-warning { margin: -12px 0 18px; padding: 10px 12px; border: 1px solid #f0dfc8; border-radius: 6px; background: #fffaf2; color: #8a6743; font-size: 10px; }
+.form-error { color: #a64e43; font-size: 10px; }
 .empty-state { display: flex; align-items: center; flex-direction: column; gap: 8px; padding: 35px 10px; color: #94999e; }
 .empty-state strong { color: #535a60; font-size: 12px; }
 .empty-state span { font-size: 10px; }
@@ -196,8 +201,8 @@ h1 { margin-top: 9px; color: #252a30; font: 700 27px Manrope, sans-serif; letter
 .modal-heading p { margin-top: 5px; color: #8b9194; font-size: 11px; }
 .contact-modal form { margin-top: 20px; display: grid; gap: 13px; }
 .contact-modal label { display: grid; gap: 6px; color: #545a60; font-size: 10px; font-weight: 600; }
-.contact-modal input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #e4e7e3; border-radius: 5px; outline: none; color: #343a40; font-size: 11px; }
-.contact-modal input:focus { border-color: #78a090; box-shadow: 0 0 0 2px #6d9c8920; }
+.contact-modal input, .contact-modal select { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #e4e7e3; border-radius: 5px; outline: none; color: #343a40; background: white; font-size: 11px; }
+.contact-modal input:focus, .contact-modal select:focus { border-color: #78a090; box-shadow: 0 0 0 2px #6d9c8920; }
 .contact-modal input::placeholder { color: #afb3b5; }
 .optional-label { color: #a3a7a9; font-weight: 400; }
 .modal-note { display: flex; align-items: center; gap: 7px; color: #93999b; font-size: 9px; }
